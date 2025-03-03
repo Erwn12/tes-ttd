@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadLink = document.getElementById('downloadLink');
 
     let pdfDoc, pdfBytes;
+    let isDrawing = false;
+    let isDragging = false;
+    let startX, startY;
 
     // Handle PDF upload
     uploadForm.addEventListener('submit', async (e) => {
@@ -26,65 +29,99 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle signature drawing
     const ctx = signatureCanvas.getContext('2d');
-    let isDrawing = false;
 
-    signatureCanvas.addEventListener('mousedown', () => (isDrawing = true));
-    signatureCanvas.addEventListener('mouseup', () => (isDrawing = false));
+    signatureCanvas.addEventListener('mousedown', (e) => {
+        isDrawing = true;
+        ctx.beginPath();
+        ctx.moveTo(e.offsetX, e.offsetY);
+    });
+
     signatureCanvas.addEventListener('mousemove', (e) => {
         if (!isDrawing) return;
-
-        const rect = signatureCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
-        ctx.lineTo(x, y);
+        ctx.lineTo(e.offsetX, e.offsetY);
         ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x, y);
+    });
+
+    signatureCanvas.addEventListener('mouseup', () => {
+        isDrawing = false;
+        ctx.closePath();
     });
 
     signatureCanvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
         isDrawing = true;
+        const touch = e.touches[0];
+        ctx.beginPath();
+        ctx.moveTo(touch.clientX - signatureCanvas.offsetLeft, touch.clientY - signatureCanvas.offsetTop);
     });
 
     signatureCanvas.addEventListener('touchmove', (e) => {
         if (!isDrawing) return;
-
         const touch = e.touches[0];
-        const rect = signatureCanvas.getBoundingClientRect();
-        const x = touch.clientX - rect.left;
-        const y = touch.clientY - rect.top;
-
-        ctx.lineTo(x, y);
+        ctx.lineTo(touch.clientX - signatureCanvas.offsetLeft, touch.clientY - signatureCanvas.offsetTop);
         ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x, y);
     });
 
-    signatureCanvas.addEventListener('touchend', () => (isDrawing = false));
+    signatureCanvas.addEventListener('touchend', () => {
+        isDrawing = false;
+        ctx.closePath();
+    });
 
-    // Save signature and embed into PDF
+    // Add drag-and-drop functionality for the signature
+    const signatureImageContainer = document.createElement('div');
+    signatureImageContainer.style.position = 'absolute';
+    signatureImageContainer.style.cursor = 'grab';
+    document.body.appendChild(signatureImageContainer);
+
     saveSignatureButton.addEventListener('click', async () => {
         if (!pdfDoc) return alert('Silakan unggah file PDF terlebih dahulu.');
 
         // Convert canvas to image
-        const signatureImage = await pdfDoc.embedPng(signatureCanvas.toDataURL());
+        const signatureDataUrl = signatureCanvas.toDataURL();
+        const img = new Image();
+        img.src = signatureDataUrl;
 
-        // Add signature to the first page of the PDF
-        const pages = pdfDoc.getPages();
-        const firstPage = pages[0];
-        firstPage.drawImage(signatureImage, {
-            x: 50,
-            y: 50,
-            width: 100,
-            height: 50,
-        });
+        // Make the image draggable
+        img.onload = () => {
+            signatureImageContainer.innerHTML = '';
+            signatureImageContainer.appendChild(img);
 
-        // Save the signed PDF
-        const signedPdfBytes = await pdfDoc.save();
-        const blob = new Blob([signedPdfBytes], { type: 'application/pdf' });
-        downloadLink.href = URL.createObjectURL(blob);
+            let offsetX = 0, offsetY = 0;
+
+            img.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                offsetX = e.offsetX;
+                offsetY = e.offsetY;
+            });
+
+            img.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                img.style.left = `${e.pageX - offsetX}px`;
+                img.style.top = `${e.pageY - offsetY}px`;
+            });
+
+            img.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            img.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                const touch = e.touches[0];
+                offsetX = touch.clientX - img.offsetLeft;
+                offsetY = touch.clientY - img.offsetTop;
+            });
+
+            img.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                const touch = e.touches[0];
+                img.style.left = `${touch.clientX - offsetX}px`;
+                img.style.top = `${touch.clientY - offsetY}px`;
+            });
+
+            img.addEventListener('touchend', () => {
+                isDragging = false;
+            });
+        };
 
         // Show download area
         downloadArea.style.display = 'block';
