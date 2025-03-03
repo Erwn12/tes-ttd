@@ -9,22 +9,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let pdfDoc, pdfBytes;
     let isDrawing = false;
-    let isDragging = false;
-    let startX, startY;
 
     // Handle PDF upload
     uploadForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+        e.preventDefault(); // Hentikan refresh halaman
 
         const file = pdfFileInput.files[0];
-        if (!file) return alert('Silakan unggah file PDF.');
+        if (!file) {
+            alert('Silakan unggah file PDF.');
+            return;
+        }
 
-        // Read PDF file
-        pdfBytes = await file.arrayBuffer();
-        pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+        try {
+            // Read PDF file
+            pdfBytes = await file.arrayBuffer();
+            pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
 
-        // Show signature area
-        signatureArea.style.display = 'block';
+            // Show signature area
+            signatureArea.style.display = 'block';
+            alert('PDF berhasil diunggah!');
+        } catch (error) {
+            console.error('Error loading PDF:', error);
+            alert('Gagal memuat PDF. Pastikan file yang diunggah adalah PDF yang valid.');
+        }
     });
 
     // Handle signature drawing
@@ -67,63 +74,39 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.closePath();
     });
 
-    // Add drag-and-drop functionality for the signature
-    const signatureImageContainer = document.createElement('div');
-    signatureImageContainer.style.position = 'absolute';
-    signatureImageContainer.style.cursor = 'grab';
-    document.body.appendChild(signatureImageContainer);
-
+    // Save signature and embed into PDF
     saveSignatureButton.addEventListener('click', async () => {
         if (!pdfDoc) return alert('Silakan unggah file PDF terlebih dahulu.');
 
-        // Convert canvas to image
-        const signatureDataUrl = signatureCanvas.toDataURL();
-        const img = new Image();
-        img.src = signatureDataUrl;
+        try {
+            // Convert canvas to image
+            const signatureDataUrl = signatureCanvas.toDataURL();
+            const img = new Image();
+            img.src = signatureDataUrl;
 
-        // Make the image draggable
-        img.onload = () => {
-            signatureImageContainer.innerHTML = '';
-            signatureImageContainer.appendChild(img);
+            // Embed signature into PDF
+            const pngImage = await pdfDoc.embedPng(signatureDataUrl);
+            const pages = pdfDoc.getPages();
+            const firstPage = pages[0];
 
-            let offsetX = 0, offsetY = 0;
-
-            img.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                offsetX = e.offsetX;
-                offsetY = e.offsetY;
+            // Add signature to the first page of the PDF
+            firstPage.drawImage(pngImage, {
+                x: 50,
+                y: 50,
+                width: 100,
+                height: 50,
             });
 
-            img.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                img.style.left = `${e.pageX - offsetX}px`;
-                img.style.top = `${e.pageY - offsetY}px`;
-            });
+            // Save the signed PDF
+            const signedPdfBytes = await pdfDoc.save();
+            const blob = new Blob([signedPdfBytes], { type: 'application/pdf' });
+            downloadLink.href = URL.createObjectURL(blob);
 
-            img.addEventListener('mouseup', () => {
-                isDragging = false;
-            });
-
-            img.addEventListener('touchstart', (e) => {
-                isDragging = true;
-                const touch = e.touches[0];
-                offsetX = touch.clientX - img.offsetLeft;
-                offsetY = touch.clientY - img.offsetTop;
-            });
-
-            img.addEventListener('touchmove', (e) => {
-                if (!isDragging) return;
-                const touch = e.touches[0];
-                img.style.left = `${touch.clientX - offsetX}px`;
-                img.style.top = `${touch.clientY - offsetY}px`;
-            });
-
-            img.addEventListener('touchend', () => {
-                isDragging = false;
-            });
-        };
-
-        // Show download area
-        downloadArea.style.display = 'block';
+            // Show download area
+            downloadArea.style.display = 'block';
+        } catch (error) {
+            console.error('Error embedding signature:', error);
+            alert('Gagal menambahkan tanda tangan ke PDF.');
+        }
     });
 });
