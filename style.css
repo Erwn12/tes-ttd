@@ -78,6 +78,8 @@ canvas:hover {
 }
 
 #signatureArea,
+#pdfPreview,
+#signatureDropArea,
 #downloadArea {
     margin-top: 20px;
     display: none;
