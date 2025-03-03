@@ -8,11 +8,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const downloadLink = document.getElementById('downloadLink');
 
     let pdfDoc, pdfBytes;
-    let isDrawing = false;
 
     // Handle PDF upload
     uploadForm.addEventListener('submit', async (e) => {
-        e.preventDefault(); // Hentikan refresh halaman
+        e.preventDefault();
 
         const file = pdfFileInput.files[0];
         if (!file) {
@@ -21,11 +20,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            // Read PDF file
             pdfBytes = await file.arrayBuffer();
             pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
 
-            // Show signature area
+            // Tampilkan halaman pertama PDF
+            await displayPDF(pdfBytes);
+
+            // Tampilkan area tanda tangan
             signatureArea.style.display = 'block';
             alert('PDF berhasil diunggah!');
         } catch (error) {
@@ -34,8 +35,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Fungsi untuk menampilkan halaman pertama PDF
+    async function displayPDF(pdfBytes) {
+        const pdfData = new Uint8Array(pdfBytes);
+        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+        const page = await pdf.getPage(1);
+
+        const scale = 1.5;
+        const viewport = page.getViewport({ scale });
+
+        const canvas = document.getElementById('pdfCanvas');
+        const context = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        await page.render({ canvasContext: context, viewport }).promise;
+
+        // Tampilkan area pratinjau PDF
+        document.getElementById('pdfPreview').style.display = 'block';
+    }
+
     // Handle signature drawing
     const ctx = signatureCanvas.getContext('2d');
+    let isDrawing = false;
 
     signatureCanvas.addEventListener('mousedown', (e) => {
         isDrawing = true;
@@ -74,35 +96,96 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.closePath();
     });
 
-    // Save signature and embed into PDF
+    // Fungsi untuk membuat tanda tangan dapat dipindahkan
+    function makeDraggable(img) {
+        let isDragging = false;
+        let offsetX, offsetY;
+
+        img.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            offsetX = e.offsetX;
+            offsetY = e.offsetY;
+        });
+
+        img.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            img.style.position = 'absolute';
+            img.style.left = `${e.pageX - offsetX}px`;
+            img.style.top = `${e.pageY - offsetY}px`;
+        });
+
+        img.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        img.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            const touch = e.touches[0];
+            offsetX = touch.clientX - img.offsetLeft;
+            offsetY = touch.clientY - img.offsetTop;
+        });
+
+        img.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const touch = e.touches[0];
+            img.style.position = 'absolute';
+            img.style.left = `${touch.clientX - offsetX}px`;
+            img.style.top = `${touch.clientY - offsetY}px`;
+        });
+
+        img.addEventListener('touchend', () => {
+            isDragging = false;
+        });
+    }
+
+    // Simpan tanda tangan sebagai gambar dan buat draggable
     saveSignatureButton.addEventListener('click', async () => {
         if (!pdfDoc) return alert('Silakan unggah file PDF terlebih dahulu.');
 
         try {
-            // Convert canvas to image
+            // Konversi canvas ke gambar
             const signatureDataUrl = signatureCanvas.toDataURL();
             const img = new Image();
             img.src = signatureDataUrl;
+            img.style.position = 'absolute';
+            img.style.width = '100px';
+            img.style.cursor = 'grab';
+
+            // Tambahkan gambar ke container
+            const container = document.getElementById('signatureImageContainer');
+            container.innerHTML = '';
+            container.appendChild(img);
+
+            // Buat tanda tangan dapat dipindahkan
+            makeDraggable(img);
+
+            // Tampilkan area drag-and-drop
+            document.getElementById('signatureDropArea').style.display = 'block';
 
             // Embed signature into PDF
             const pngImage = await pdfDoc.embedPng(signatureDataUrl);
             const pages = pdfDoc.getPages();
             const firstPage = pages[0];
 
-            // Add signature to the first page of the PDF
+            // Ambil posisi tanda tangan
+            const rect = img.getBoundingClientRect();
+            const x = rect.left - container.getBoundingClientRect().left;
+            const y = rect.top - container.getBoundingClientRect().top;
+
+            // Tambahkan tanda tangan ke halaman pertama PDF
             firstPage.drawImage(pngImage, {
-                x: 50,
-                y: 50,
+                x: x,
+                y: firstPage.getHeight() - y - 50, // Sesuaikan posisi Y
                 width: 100,
                 height: 50,
             });
 
-            // Save the signed PDF
+            // Simpan PDF yang sudah ditandatangani
             const signedPdfBytes = await pdfDoc.save();
             const blob = new Blob([signedPdfBytes], { type: 'application/pdf' });
             downloadLink.href = URL.createObjectURL(blob);
 
-            // Show download area
+            // Tampilkan area unduh
             downloadArea.style.display = 'block';
         } catch (error) {
             console.error('Error embedding signature:', error);
