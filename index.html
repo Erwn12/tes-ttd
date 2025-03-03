@@ -6,6 +6,7 @@
     <title>Tanda Tangan PDF Online</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -18,15 +19,27 @@
             <button type="submit">Unggah</button>
         </form>
 
+        <!-- Area Pratinjau PDF -->
+        <div id="pdfPreview" style="display: none; margin-top: 20px;">
+            <h2>Pratinjau PDF</h2>
+            <canvas id="pdfCanvas"></canvas>
+        </div>
+
         <!-- Area Tanda Tangan -->
-        <div id="signatureArea" style="display: none;">
+        <div id="signatureArea" style="display: none; margin-top: 20px;">
             <h2>Tambahkan Tanda Tangan</h2>
             <canvas id="signatureCanvas" width="400" height="200"></canvas>
             <button id="saveSignature">Simpan Tanda Tangan</button>
         </div>
 
+        <!-- Area Drag-and-Drop Tanda Tangan -->
+        <div id="signatureDropArea" style="position: relative; margin-top: 20px; display: none;">
+            <h2>Tanda Tangan</h2>
+            <div id="signatureImageContainer" style="position: relative; width: 100%; height: 300px; border: 1px dashed #ccc;"></div>
+        </div>
+
         <!-- Area Unduh PDF -->
-        <div id="downloadArea" style="display: none;">
+        <div id="downloadArea" style="display: none; margin-top: 20px;">
             <h2>Unduh Dokumen yang Sudah Ditandatangani</h2>
             <a id="downloadLink" href="#" download="signed-document.pdf">Unduh PDF</a>
         </div>
